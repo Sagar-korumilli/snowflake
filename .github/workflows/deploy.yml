@@ -14,15 +14,16 @@ jobs:
       matrix:
         environment: [dev, qa, uat, prod]
 
-    # Conditionally run only for mapped environments
-    if: |
-      (github.ref_name == 'dev' && matrix.environment == 'dev') ||
-      (github.ref_name == 'release' && (matrix.environment == 'qa' || matrix.environment == 'uat')) ||
-      (github.ref_name == 'master' && matrix.environment == 'prod')
-
     environment: ${{ matrix.environment }}
 
     steps:
+      - name: Condition check for environment
+        if: |
+          (github.ref_name == 'dev' && matrix.environment == 'dev') ||
+          (github.ref_name == 'release' && (matrix.environment == 'qa' || matrix.environment == 'uat')) ||
+          (github.ref_name == 'master' && matrix.environment == 'prod')
+        run: echo "Running deployment for ${{ matrix.environment }}"
+
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -34,7 +35,7 @@ jobs:
       - name: Install SnowCLI
         run: pip install snowflake-cli-labs
 
-      - name: Configure SnowCLI for ${{ matrix.environment }}
+      - name: Configure SnowCLI
         run: |
           mkdir -p ~/.snowflake
           cat << EOF > ~/.snowflake/config.toml
@@ -50,18 +51,15 @@ jobs:
       - name: Get changed SQL files
         id: changes
         run: |
-          git fetch origin ${{ github.ref_name }}
           CHANGED_FILES=$(git diff --name-only origin/${{ github.ref_name }}...HEAD | grep '\.sql$' || true)
-          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
-          echo "$CHANGED_FILES" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
 
       - name: Deploy changed SQL files
-        if: env.CHANGED_FILES != ''
+        if: steps.changes.outputs.changed_files != ''
         run: |
           echo "Files to deploy:"
-          echo "$CHANGED_FILES"
-          for file in $CHANGED_FILES; do
+          echo "${{ steps.changes.outputs.changed_files }}"
+          for file in ${{ steps.changes.outputs.changed_files }}; do
             echo "Deploying $file"
             snowcli sql run --file "$file" --connection default
           done
