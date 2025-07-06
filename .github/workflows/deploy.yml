@@ -3,26 +3,12 @@ name: Deploy to Snowflake
 on:
   push:
     branches:
-      - dev
-      - release
       - master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        environment: [dev, qa, uat, prod]
-
-    environment: ${{ matrix.environment }}
-
-    steps:
-      - name: Condition check for environment
-        if: |
-          (github.ref_name == 'dev' && matrix.environment == 'dev') ||
-          (github.ref_name == 'release' && (matrix.environment == 'qa' || matrix.environment == 'uat')) ||
-          (github.ref_name == 'master' && matrix.environment == 'prod')
-        run: echo "Running deployment for ${{ matrix.environment }}"
 
       - name: Checkout repository
         uses: actions/checkout@v3
