@@ -27,7 +27,7 @@ jobs:
         run: |
           mkdir -p ~/.snowflake
           cat << EOF > ~/.snowflake/config.toml
-          [default]
+          [connections.default]
           account = "https://iiljdbv-rv91789.snowflakecomputing.com"
           user = "SAGARK"
           password = "Infyme@25011998"
