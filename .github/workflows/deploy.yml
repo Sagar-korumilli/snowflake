@@ -1,4 +1,4 @@
-name: Deploy Changed SQL Files to Snowflake
+name: Deploy to Snowflake
 
 on:
   push:
@@ -37,21 +37,36 @@ jobs:
           EOF
           chmod 600 ~/.snowflake/config.toml
 
-      - name: Test Snowflake Connection
+      - name: Test Snowflake connection
         run: snow connection test --connection default
 
-      - name: Get Changed SQL Files
-        id: changes
+      - name: Deploy schemas creation script
         run: |
-          git fetch origin master
-          CHANGED_FILES=$(git diff --name-only origin/master...HEAD | grep '^schemas/.*\.sql$' || true)
-          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+          if [ -f "scripts/create_schemas.sql" ]; then
+            echo "Creating schemas..."
+            snow sql -f scripts/create_schemas.sql --connection default
+          fi
 
-      - name: Deploy Changed SQL Files
-        if: steps.changes.outputs.changed_files != ''
+      - name: Deploy tables
         run: |
-          echo "Deploying changed files:"
-          for file in ${{ steps.changes.outputs.changed_files }}; do
+          echo "Deploying tables..."
+          find schemas -type f -path "*/tables/*.sql" | sort | while read file; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy views
+        run: |
+          echo "Deploying views..."
+          find schemas -type f -path "*/views/*.sql" | sort | while read file; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy other SQL objects
+        run: |
+          echo "Deploying other objects (functions, procs, etc)..."
+          find schemas -type f -not -path "*/tables/*" -not -path "*/views/*" -name "*.sql" | sort | while read file; do
             echo "Deploying $file"
             snow sql -f "$file" --connection default
           done
