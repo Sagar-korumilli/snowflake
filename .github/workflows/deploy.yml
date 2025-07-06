@@ -1,4 +1,4 @@
-name: Deploy to Snowflake
+name: Deploy Changed SQL Files to Snowflake
 
 on:
   push:
@@ -40,39 +40,18 @@ jobs:
       - name: Test Snowflake Connection
         run: snow connection test --connection default
 
-      - name: Deploy schemas (CREATE SCHEMA statements)
+      - name: Get Changed SQL Files
+        id: changes
         run: |
-          echo "Creating schemas..."
-          snow sql -f scripts/*.sql --connection default
+          git fetch origin master
+          CHANGED_FILES=$(git diff --name-only origin/master...HEAD | grep '^schemas/.*\.sql$' || true)
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
 
-      - name: Deploy TABLES
+      - name: Deploy Changed SQL Files
+        if: steps.changes.outputs.changed_files != ''
         run: |
-          echo "Deploying TABLES..."
-          find schemas -type f -path "*/tables/*.sql" | sort | while read file; do
-            echo "Deploying $file"
-            snow sql -f "$file" --connection default
-          done
-
-      - name: Deploy FUNCTIONS
-        run: |
-          echo "Deploying FUNCTIONS..."
-          find schemas -type f -path "*/functions/*.sql" | sort | while read file; do
-            echo "Deploying $file"
-            snow sql -f "$file" --connection default
-          done
-
-      - name: Deploy PROCEDURES
-        run: |
-          echo "Deploying PROCEDURES..."
-          find schemas -type f -path "*/procedures/*.sql" | sort | while read file; do
-            echo "Deploying $file"
-            snow sql -f "$file" --connection default
-          done
-
-      - name: Deploy VIEWS
-        run: |
-          echo "Deploying VIEWS..."
-          find schemas -type f -path "*/views/*.sql" | sort | while read file; do
+          echo "Deploying changed files:"
+          for file in ${{ steps.changes.outputs.changed_files }}; do
             echo "Deploying $file"
             snow sql -f "$file" --connection default
           done
