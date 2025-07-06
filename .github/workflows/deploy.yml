@@ -19,7 +19,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install SnowCLI
-        run: pip install snowflake-cli
+        run: |
+          pip install --user snowflake-cli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Configure SnowCLI
         run: |
