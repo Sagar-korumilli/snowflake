@@ -35,6 +35,7 @@ jobs:
           database = "DEVOPS"
           warehouse = "COMPUTE_WH"
           EOF
+          chmod 600 ~/.snowflake/config.toml
 
       - name: Test Snowflake Connection
         run: snow connection test --connection default
