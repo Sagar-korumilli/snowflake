@@ -45,8 +45,28 @@ jobs:
       - name: Detect Changed SQL Files
         id: changes
         run: |
-          git fetch origin master
-          CHANGED_FILES=$(git diff --name-only origin/master...HEAD | grep '\.sql$' || true)
+          CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep '\.sql$' || true)
+  
+  # If no changes found, fallback to all SQLs (first deployment)
+  if [[ -z "$CHANGED_FILES" ]]; then
+    echo "No changed .sql files found. Assuming first deployment: deploying everything."
+    echo "DEPLOY_ALL=true" >> $GITHUB_ENV
+  else
+    echo "$CHANGED_FILES" > changed_files.txt
+    echo "DEPLOY_ALL=false" >> $GITHUB_ENV
+  fi
+  shell: /usr/bin/bash -e {0}
+  env:
+    pythonLocation: /opt/hostedtoolcache/Python/3.11.13/x64
+    PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.13/x64/lib/pkgconfig
+    Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.13/x64
+    Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.13/x64
+    Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.13/x64
+    LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.13/x64/lib
+  
+From https://github.com/Sagar-korumilli/snowflake
+ * branch            master     -> FETCH_HEAD
+No changed .sql files found. Assuming first deployment: deploying everything.
 
           # If no changes found, fallback to all SQLs (first deployment)
           if [[ -z "$CHANGED_FILES" ]]; then
