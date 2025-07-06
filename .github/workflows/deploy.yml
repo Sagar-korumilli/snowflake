@@ -3,7 +3,8 @@ name: Deploy to Snowflake
 on:
   push:
     branches:
-      - master
+      - '**'  # Trigger on all branches
+  pull_request:
 
 jobs:
   deploy:
@@ -12,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required for accurate diffing
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -41,68 +44,44 @@ jobs:
         run: snow connection test --connection default
 
       - name: Detect Changed SQL Files
-        id: changes
+        id: detect-changes
         run: |
-          CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep '\.sql$' || true)
+          git fetch origin ${{ github.event.pull_request.base.ref || 'main' }}
+
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref || 'main' }}...HEAD | grep '\.sql$' || true)
 
           if [[ -z "$CHANGED_FILES" ]]; then
-            echo "No changed .sql files found. Assuming first deployment: deploying everything."
+            echo "No changed .sql files found. Assuming first deployment or fallback to full deploy."
             echo "DEPLOY_ALL=true" >> $GITHUB_ENV
           else
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
             echo "$CHANGED_FILES" > changed_files.txt
             echo "DEPLOY_ALL=false" >> $GITHUB_ENV
           fi
 
       - name: Deploy schemas creation script
+        if: env.DEPLOY_ALL == 'true'
         run: |
           if [ -f "scripts/create_schemas.sql" ]; then
             echo "Creating schemas..."
             snow sql -f scripts/create_schemas.sql --connection default
           fi
 
-      - name: Deploy changed or all tables
+      - name: Deploy Changed or All SQLs
         run: |
-          echo "Deploying tables..."
-          if [[ "$DEPLOY_ALL" == "true" ]]; then
-            find schemas -type f -path "*/tables/*.sql" | sort | while read file; do
+          if [[ "${DEPLOY_ALL}" == "true" ]]; then
+            echo "Full deployment: deploying all .sql files under schemas/"
+            find schemas -type f -name "*.sql" | sort | while read file; do
               echo "Deploying $file"
               snow sql -f "$file" --connection default
             done
           else
-            grep 'tables/' changed_files.txt || true | while read file; do
-              echo "Deploying changed table: $file"
-              snow sql -f "$file" --connection default
-            done
-          fi
-
-      - name: Deploy changed or all views
-        run: |
-          echo "Deploying views..."
-          if [[ "$DEPLOY_ALL" == "true" ]]; then
-            find schemas -type f -path "*/views/*.sql" | sort | while read file; do
-              echo "Deploying $file"
-              snow sql -f "$file" --connection default
-            done
-          else
-            grep 'views/' changed_files.txt || true | while read file; do
-              echo "Deploying changed view: $file"
-              snow sql -f "$file" --connection default
-            done
-          fi
-
-      - name: Deploy other changed or all SQL objects
-        run: |
-          echo "Deploying other objects..."
-          if [[ "$DEPLOY_ALL" == "true" ]]; then
-            find schemas -type f -name "*.sql" \
-              -not -path "*/tables/*" -not -path "*/views/*" \
-              | sort | while read file; do
+            echo "Incremental deployment: deploying only changed files..."
+            cat changed_files.txt | while read file; do
+              if [ -f "$file" ]; then
                 echo "Deploying $file"
                 snow sql -f "$file" --connection default
-            done
-          else
-            grep -E -v 'tables/|views/' changed_files.txt || true | while read file; do
-              echo "Deploying changed object: $file"
-              snow sql -f "$file" --connection default
+              fi
             done
           fi
