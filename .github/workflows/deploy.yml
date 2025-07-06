@@ -40,19 +40,39 @@ jobs:
       - name: Test Snowflake Connection
         run: snow connection test --connection default
 
-      - name: Deploy schema creation script
+      - name: Deploy schemas (CREATE SCHEMA statements)
         run: |
-          if [ -f scripts/create_schemas.sql ]; then
-            echo "Creating schemas..."
-            snow sql -f scripts/create_schemas.sql --connection default
-          else
-            echo "No schema creation script found."
-          fi
+          echo "Creating schemas..."
+          snow sql -f scripts/create_schemas.sql --connection default
 
-      - name: Deploy SQL files under schemas/
+      - name: Deploy TABLES
         run: |
-          echo "Deploying all SQL files under schemas/..."
-          find schemas -type f -name "*.sql" | while read file; do
+          echo "Deploying TABLES..."
+          find schemas -type f -path "*/tables/*.sql" | sort | while read file; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy FUNCTIONS
+        run: |
+          echo "Deploying FUNCTIONS..."
+          find schemas -type f -path "*/functions/*.sql" | sort | while read file; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy PROCEDURES
+        run: |
+          echo "Deploying PROCEDURES..."
+          find schemas -type f -path "*/procedures/*.sql" | sort | while read file; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy VIEWS
+        run: |
+          echo "Deploying VIEWS..."
+          find schemas -type f -path "*/views/*.sql" | sort | while read file; do
             echo "Deploying $file"
             snow sql -f "$file" --connection default
           done
