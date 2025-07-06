@@ -8,8 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
 
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -34,10 +34,13 @@ jobs:
           warehouse = "COMPUTE_WH"
           EOF
 
+      - name: Test Snowflake Connection
+        run: snowcli connection test --connection default
+
       - name: Get changed SQL files
         id: changes
         run: |
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.ref_name }}...HEAD | grep '\.sql$' || true)
+          CHANGED_FILES=$(git diff --name-only origin/master...HEAD | grep '\.sql$' || true)
           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
 
       - name: Deploy changed SQL files
