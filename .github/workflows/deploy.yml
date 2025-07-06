@@ -40,18 +40,25 @@ jobs:
       - name: Test Snowflake Connection
         run: snow connection test --connection default
 
-      - name: Get changed SQL files
+      - name: Deploy schema creation scripts
+        run: |
+          echo "Deploying schema creation scripts from scripts/..."
+          for file in scripts/*.sql; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Get changed schema SQL files
         id: changes
         run: |
-          CHANGED_FILES=$(git diff --name-only origin/master...HEAD | grep '\.sql$' || true)
+          CHANGED_FILES=$(git diff --name-only origin/master...HEAD | grep '^schemas/.*\.sql$' || true)
           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
 
-      - name: Deploy changed SQL files
+      - name: Deploy changed schema SQL files
         if: steps.changes.outputs.changed_files != ''
         run: |
-          echo "Files to deploy:"
-          echo "${{ steps.changes.outputs.changed_files }}"
+          echo "Deploying changed schema files:"
           for file in ${{ steps.changes.outputs.changed_files }}; do
             echo "Deploying $file"
-            snowcli sql run --file "$file" --connection default
+            snow sql -f "$file" --connection default
           done
