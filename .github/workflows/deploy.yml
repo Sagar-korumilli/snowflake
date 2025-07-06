@@ -1,20 +1,67 @@
-name: Snowflake CI/CD Deploy
+name: Deploy to Snowflake
 
 on:
   push:
     branches:
-      - main
+      - dev
+      - release
+      - master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+    strategy:
+      matrix:
+        environment: [dev, qa, uat, prod]
 
-      - name: Deploy to Snowflake
+    # Conditionally run only for mapped environments
+    if: |
+      (github.ref_name == 'dev' && matrix.environment == 'dev') ||
+      (github.ref_name == 'release' && (matrix.environment == 'qa' || matrix.environment == 'uat')) ||
+      (github.ref_name == 'master' && matrix.environment == 'prod')
+
+    environment: ${{ matrix.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install SnowCLI
+        run: pip install snowflake-cli-labs
+
+      - name: Configure SnowCLI for ${{ matrix.environment }}
         run: |
-          snowsql -a ${{ secrets.SNOWFLAKE_ACCOUNT }} \
-                  -u ${{ secrets.SNOWFLAKE_USER }} \
-                  -p ${{ secrets.SNOWFLAKE_PASSWORD }} \
-                  -d MY_DB -s public -r SYSADMIN \
-                  -f cicd/deploy.sql
+          mkdir -p ~/.snowflake
+          cat << EOF > ~/.snowflake/config.toml
+          [default]
+          account = "https://iiljdbv-rv91789.snowflakecomputing.com"
+          user = "SAGARK"
+          password = "Infyme@25011998"
+          role = "ACCOUNTADMIN"
+          database = "DEVOPS"
+          warehouse = "COMPUTE_WH"
+          EOF
+
+      - name: Get changed SQL files
+        id: changes
+        run: |
+          git fetch origin ${{ github.ref_name }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.ref_name }}...HEAD | grep '\.sql$' || true)
+          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
+          echo "$CHANGED_FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Deploy changed SQL files
+        if: env.CHANGED_FILES != ''
+        run: |
+          echo "Files to deploy:"
+          echo "$CHANGED_FILES"
+          for file in $CHANGED_FILES; do
+            echo "Deploying $file"
+            snowcli sql run --file "$file" --connection default
+          done
