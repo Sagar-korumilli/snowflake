@@ -43,7 +43,7 @@ jobs:
       - name: Deploy schemas (CREATE SCHEMA statements)
         run: |
           echo "Creating schemas..."
-          snow sql -f scripts/create_schemas.sql --connection default
+          snow sql -f scripts/*.sql --connection default
 
       - name: Deploy TABLES
         run: |
