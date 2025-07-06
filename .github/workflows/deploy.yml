@@ -19,7 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install SnowCLI
-        run: pip install snowflake-cli-labs
+        run: pip install snowflake-cli
 
       - name: Configure SnowCLI
         run: |
