@@ -37,7 +37,7 @@ jobs:
           EOF
 
       - name: Test Snowflake Connection
-        run: snowcli connection test --connection default
+        run: snow connection test --connection default
 
       - name: Get changed SQL files
         id: changes
