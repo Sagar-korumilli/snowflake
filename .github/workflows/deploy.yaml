@@ -44,12 +44,12 @@ jobs:
           mkdir -p ~/.snowflake
           cat <<EOF > ~/.snowflake/config.toml
           [connections.default]
-          account = "your_account"
-          user = "your_user"
-          password = "your_password"
-          role = "your_role"
-          warehouse = "your_warehouse"
-          database = "your_db"
+          account = "iiljdbv-rv91789"
+          user = "SAGARK"
+          password = "Infyme@25011998"
+          role = "ACCOUNTADMIN"
+          database = "DEVOPS"
+          warehouse = "COMPUTE_WH"
           EOF
           chmod 600 ~/.snowflake/config.toml
 
