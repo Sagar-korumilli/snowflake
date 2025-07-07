@@ -3,8 +3,14 @@ name: Deploy to Snowflake
 on:
   push:
     branches:
-      - '**'  # Trigger on all branches
+      - main
+      - release
+      - dev
   pull_request:
+    branches:
+      - main
+      - release
+      - dev
 
 jobs:
   deploy:
@@ -14,7 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Required for accurate diffing
+          fetch-depth: 0  # required for full git history to do proper diff
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,6 +31,7 @@ jobs:
         run: |
           pip install --user snowflake-cli
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Configure SnowCLI
         run: |
           mkdir -p ~/.snowflake
@@ -38,44 +45,62 @@ jobs:
           warehouse = "COMPUTE_WH"
           EOF
           chmod 600 ~/.snowflake/config.toml
+
       - name: Test Snowflake connection
         run: snow connection test --connection default
 
-      - name: Detect Changed SQL Files
-        id: detect-changes
+      - name: Detect changed SQL files
+        id: detect_changes
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref || 'main' }}
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref || 'main' }}...HEAD | grep '\.sql$' || true)
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE=${{ github.event.pull_request.base.ref }}
+            HEAD=${{ github.event.pull_request.head.ref }}
+          else
+            BASE=${{ github.ref_name }}
+            HEAD=HEAD
+          fi
+
+          echo "Base branch: $BASE"
+          echo "Head ref: $HEAD"
+
+          git fetch origin $BASE
+          git fetch origin $HEAD
+
+          CHANGED_FILES=$(git diff --name-only origin/$BASE...origin/$HEAD | grep '\.sql$' || true)
+
           if [[ -z "$CHANGED_FILES" ]]; then
-            echo "No changed .sql files found. Assuming first deployment or fallback to full deploy."
+            echo "No .sql file changes found. Deploying all."
             echo "DEPLOY_ALL=true" >> $GITHUB_ENV
           else
-            echo "Changed files:"
+            echo "Found changed SQL files:"
             echo "$CHANGED_FILES"
             echo "$CHANGED_FILES" > changed_files.txt
             echo "DEPLOY_ALL=false" >> $GITHUB_ENV
           fi
-      - name: Deploy schemas creation script
-        if: env.DEPLOY_ALL == 'true'
+
+      - name: Deploy schemas creation script (always)
         run: |
           if [ -f "scripts/create_schemas.sql" ]; then
-            echo "Creating schemas..."
+            echo "Deploying schemas..."
             snow sql -f scripts/create_schemas.sql --connection default
           fi
-      - name: Deploy Changed or All SQLs
+
+      - name: Deploy changed or all SQL files
         run: |
-          if [[ "${DEPLOY_ALL}" == "true" ]]; then
-            echo "Full deployment: deploying all .sql files under schemas/"
+          if [[ "$DEPLOY_ALL" == "true" ]]; then
+            echo "Deploying all SQL files under schemas/..."
             find schemas -type f -name "*.sql" | sort | while read file; do
               echo "Deploying $file"
               snow sql -f "$file" --connection default
             done
           else
-            echo "Incremental deployment: deploying only changed files..."
-            cat changed_files.txt | while read file; do
-              if [ -f "$file" ]; then
+            echo "Deploying only changed SQL files..."
+            while read file; do
+              if [[ -f "$file" ]]; then
                 echo "Deploying $file"
                 snow sql -f "$file" --connection default
+              else
+                echo "File $file no longer exists. Skipping."
               fi
-            done
+            done < changed_files.txt
           fi
