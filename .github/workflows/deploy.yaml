@@ -6,11 +6,13 @@ on:
       - main
       - release
       - dev
+      - master
   pull_request:
     branches:
       - main
       - release
       - dev
+      - master
 
 jobs:
   deploy:
