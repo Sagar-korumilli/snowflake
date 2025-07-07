@@ -7,13 +7,6 @@ on:
       - release
       - dev
       - master
-  pull_request:
-    branches:
-      - main
-      - release
-      - dev
-      - master
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -21,8 +14,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # required for full git history to do proper diff
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -51,58 +42,59 @@ jobs:
       - name: Test Snowflake connection
         run: snow connection test --connection default
 
-      - name: Detect changed SQL files
+      - name: Detect changed .sql files
         id: detect_changes
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE=${{ github.event.pull_request.base.ref }}
-            HEAD=${{ github.event.pull_request.head.ref }}
-          else
-            BASE=${{ github.ref_name }}
-            HEAD=HEAD
-          fi
-
-          echo "Base branch: $BASE"
-          echo "Head ref: $HEAD"
-
-          git fetch origin $BASE
-          git fetch origin $HEAD
-
-          CHANGED_FILES=$(git diff --name-only origin/$BASE...origin/$HEAD | grep '\.sql$' || true)
-
+          git fetch origin
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.before }}...HEAD | grep '\.sql$' || true)
           if [[ -z "$CHANGED_FILES" ]]; then
-            echo "No .sql file changes found. Deploying all."
+            echo "No changed .sql files found. Deploying everything."
             echo "DEPLOY_ALL=true" >> $GITHUB_ENV
           else
-            echo "Found changed SQL files:"
-            echo "$CHANGED_FILES"
             echo "$CHANGED_FILES" > changed_files.txt
             echo "DEPLOY_ALL=false" >> $GITHUB_ENV
           fi
 
-      - name: Deploy schemas creation script (always)
+      - name: Deploy schemas creation script
+        if: env.DEPLOY_ALL == 'true' || (env.DEPLOY_ALL == 'false' && contains(fromJSON(steps.detect_changes.outputs.CHANGED_FILES), 'scripts/create_schemas.sql'))
         run: |
           if [ -f "scripts/create_schemas.sql" ]; then
-            echo "Deploying schemas..."
+            echo "Creating schemas..."
             snow sql -f scripts/create_schemas.sql --connection default
           fi
 
-      - name: Deploy changed or all SQL files
+      - name: Deploy changed tables
+        if: env.DEPLOY_ALL == 'true' || env.DEPLOY_ALL == 'false'
         run: |
+          echo "Deploying table SQLs..."
+          FILES=${DEPLOY_ALL == 'true' && find schemas -type f -path "*/tables/*.sql" || grep 'tables/' changed_files.txt}
+          for file in $FILES; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy changed views
+        if: env.DEPLOY_ALL == 'true' || env.DEPLOY_ALL == 'false'
+        run: |
+          echo "Deploying view SQLs..."
+          FILES=${DEPLOY_ALL == 'true' && find schemas -type f -path "*/views/*.sql" || grep 'views/' changed_files.txt}
+          for file in $FILES; do
+            echo "Deploying $file"
+            snow sql -f "$file" --connection default
+          done
+
+      - name: Deploy other changed SQL objects
+        if: env.DEPLOY_ALL == 'true' || env.DEPLOY_ALL == 'false'
+        run: |
+          echo "Deploying other SQLs (functions, procedures, etc)..."
           if [[ "$DEPLOY_ALL" == "true" ]]; then
-            echo "Deploying all SQL files under schemas/..."
-            find schemas -type f -name "*.sql" | sort | while read file; do
+            find schemas -type f -not -path "*/tables/*" -not -path "*/views/*" -name "*.sql" | sort | while read file; do
               echo "Deploying $file"
               snow sql -f "$file" --connection default
             done
           else
-            echo "Deploying only changed SQL files..."
-            while read file; do
-              if [[ -f "$file" ]]; then
-                echo "Deploying $file"
-                snow sql -f "$file" --connection default
-              else
-                echo "File $file no longer exists. Skipping."
-              fi
-            done < changed_files.txt
+            grep -vE 'tables/|views/' changed_files.txt | while read file; do
+              echo "Deploying $file"
+              snow sql -f "$file" --connection default
+            done
           fi
