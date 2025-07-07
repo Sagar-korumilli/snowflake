@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # needed for full diff
+          fetch-depth: 0
 
       - name: Set environment variables
         run: |
@@ -53,7 +53,7 @@ jobs:
           EOF
           chmod 600 ~/.snowflake/config.toml
 
-      - name: Deploy SQL files
+      - name: Deploy tables
         run: |
           echo "Deploying tables..."
           if [[ "$DEPLOY_ALL" == "true" ]]; then
@@ -68,4 +68,32 @@ jobs:
             done
           fi
 
-      # Repeat similar blocks for views and other objects...
+      - name: Deploy views
+        run: |
+          echo "Deploying views..."
+          if [[ "$DEPLOY_ALL" == "true" ]]; then
+            find schemas -type f -path "*/views/*.sql" | sort | while read file; do
+              echo "Deploying $file"
+              snow sql -f "$file" --connection default
+            done
+          else
+            grep 'views/' changed_files.txt | while read file; do
+              echo "Deploying changed view: $file"
+              snow sql -f "$file" --connection default
+            done
+          fi
+
+      - name: Deploy other SQL objects (functions, procedures, etc)
+        run: |
+          echo "Deploying other objects..."
+          if [[ "$DEPLOY_ALL" == "true" ]]; then
+            find schemas -type f -name "*.sql" ! -path "*/tables/*" ! -path "*/views/*" | sort | while read file; do
+              echo "Deploying $file"
+              snow sql -f "$file" --connection default
+            done
+          else
+            grep -vE 'tables/|views/' changed_files.txt | while read file; do
+              echo "Deploying changed object: $file"
+              snow sql -f "$file" --connection default
+            done
+          fi
