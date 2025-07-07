@@ -51,6 +51,7 @@ jobs:
           warehouse = "your_warehouse"
           database = "your_db"
           EOF
+          chmod 600 ~/.snowflake/config.toml
 
       - name: Deploy SQL files
         run: |
