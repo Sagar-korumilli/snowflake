@@ -1,4 +1,4 @@
-CREATE OR REPLACE TABLE finance.transactions12 (
+CREATE OR REPLACE TABLE finance.transactions121 (
     transaction_id INT,
     account_id INT,
     amount NUMBER(12,2),
