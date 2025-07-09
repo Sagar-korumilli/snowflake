@@ -16,4 +16,4 @@ CREATE OR REPLACE TABLE finance.transactions321 (
     amount NUMBER(12,2),
     transaction_date DATE
 );
-ALTER TABLE finance.transactions321 ADD COLUMN transaction_type STRING;
+ALTER TABLE finance.transactions321 ADD COLUMN transaction_type VARCHAR(20);
