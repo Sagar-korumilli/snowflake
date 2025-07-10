@@ -10,3 +10,4 @@ CREATE OR REPLACE TABLE marketing.campaigns2 (
     start_date DATE,
     end_date DATE
 );
+###tessting
